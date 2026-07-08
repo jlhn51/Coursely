@@ -38,6 +38,7 @@ export function Wordmark({ href, size = "md", className = "" }: WordmarkProps) {
 }
 
 function Mark({ size }: { size: number }) {
+  // `text-accent` resolves via CSS var — auto-swaps to #5A6BFF in dark mode.
   return (
     <svg
       viewBox="0 0 20 20"
@@ -46,25 +47,27 @@ function Mark({ size }: { size: number }) {
       aria-hidden="true"
       className="shrink-0 text-accent"
     >
-      {/* Back card — slightly translucent, offset up-left */}
+      {/* Back card — 60% opacity, rotated -8° around its center, offset up-left */}
       <rect
-        x="1"
-        y="0"
-        width="12"
-        height="14"
-        rx="2.5"
+        x="2.5"
+        y="2"
+        width="9"
+        height="11"
+        rx="2"
         fill="currentColor"
-        opacity="0.85"
+        opacity="0.6"
+        transform="rotate(-8 7 7.5)"
       />
-      {/* Front card — solid, offset down-right, with a soft drop shadow */}
+      {/* Front card — solid, rotated +6° around its center, offset down-right, slightly larger */}
       <rect
         x="7"
-        y="6"
-        width="12"
-        height="14"
-        rx="2.5"
+        y="5"
+        width="11"
+        height="13"
+        rx="2"
         fill="currentColor"
-        style={{ filter: "drop-shadow(0 1px 2px rgb(59 76 255 / 0.35))" }}
+        transform="rotate(6 12.5 11.5)"
+        style={{ filter: "drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.18))" }}
       />
     </svg>
   );

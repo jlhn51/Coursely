@@ -1,5 +1,7 @@
 import Link from "next/link";
 import {
+  BookOpen,
+  Calendar,
   CalendarRange,
   Check,
   ChevronDown,
@@ -7,15 +9,22 @@ import {
   Download,
   EyeOff,
   FileText,
+  HelpCircle,
   Layers,
   ListChecks,
   Lock,
+  MessageSquare,
   Mic,
   Shield,
+  ShieldCheck,
   Sparkles,
+  Tag,
   Trash2,
   TrendingUp,
+  Workflow,
   X,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
 import { HeroPreview } from "@/components/hero-preview";
 import { Reveal } from "@/components/reveal";
@@ -82,12 +91,12 @@ const steps = [
 
 const builtFor = [
   {
-    icon: CalendarRange,
+    icon: Calendar,
     title: "Course Timeline",
     body: "Every course you're taking, laid out week by week.",
   },
   {
-    icon: Sparkles,
+    icon: MessageSquare,
     title: "AI Tutor",
     body: "Answers grounded in the materials you actually uploaded.",
   },
@@ -219,8 +228,13 @@ function HeroSection() {
     <section className="mx-auto w-full max-w-6xl px-6 pb-20 pt-16 md:pb-28 md:pt-24">
       <div className="grid grid-cols-1 items-center gap-16 md:grid-cols-5 md:gap-12">
         <div className="md:col-span-3">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-paper px-3 py-1 text-[12px] font-medium text-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-white px-3 py-1 text-[12px] font-medium text-muted dark:bg-[#141414]">
+            <Zap
+              size={13}
+              strokeWidth={2}
+              aria-hidden="true"
+              className="text-accent"
+            />
             Free while in beta · No credit card
           </span>
 
@@ -275,7 +289,7 @@ function WhatItDoesSection() {
       id="features"
       className="mx-auto w-full max-w-6xl px-6 py-20 md:py-28"
     >
-      <Eyebrow>What it does</Eyebrow>
+      <Eyebrow icon={Sparkles}>What it does</Eyebrow>
       <SectionHeading>
         Your semester, <AccentSpan>unified.</AccentSpan>
       </SectionHeading>
@@ -310,18 +324,22 @@ function HowItWorksSection() {
       id="how-it-works"
       className="mx-auto w-full max-w-6xl px-6 py-20 md:py-28"
     >
-      <Eyebrow>How it works</Eyebrow>
+      <Eyebrow icon={Workflow}>How it works</Eyebrow>
       <SectionHeading>
-        From syllabus to A in <AccentSpan>four steps.</AccentSpan>
+        From syllabus to <AccentSpan>ready</AccentSpan> in four steps.
       </SectionHeading>
 
-      <ol className="mt-14 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <ol className="mt-14 grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {steps.map((s) => (
           <li
             key={s.n}
-            className="group relative rounded-xl border border-hairline p-6 transition-colors hover:border-ink/20 dark:hover:border-white/20"
+            className="group flex h-full flex-col rounded-2xl border border-hairline bg-white p-8 transition-all duration-200 hover:border-ink/25 hover:shadow-[inset_0_-2px_0_0_rgb(59_76_255_/_0.2)] dark:bg-[#141414] dark:hover:border-white/25 dark:hover:shadow-[inset_0_-2px_0_0_rgb(90_107_255_/_0.25)]"
           >
-            <p className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted">
+            <p className="flex items-center gap-2 text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted">
+              <span
+                aria-hidden="true"
+                className="inline-block h-1.5 w-1.5 rounded-full bg-accent"
+              />
               Step {s.n}
             </p>
             <h3 className="mt-5 text-[19px] font-semibold leading-[1.25] text-ink">
@@ -330,12 +348,6 @@ function HowItWorksSection() {
             <p className="mt-3 text-[14.5px] leading-[1.55] text-muted">
               {s.body}
             </p>
-            <span
-              aria-hidden="true"
-              className="absolute right-6 top-6 font-serif text-[36px] italic leading-none text-accent/25 transition-colors group-hover:text-accent/50"
-            >
-              {s.n}
-            </span>
           </li>
         ))}
       </ol>
@@ -356,7 +368,7 @@ function BuiltForSection() {
       id="built-for"
       className="mx-auto w-full max-w-6xl px-6 py-20 md:py-28"
     >
-      <Eyebrow>What you get</Eyebrow>
+      <Eyebrow icon={BookOpen}>What you get</Eyebrow>
       <SectionHeading>
         Built for <AccentSpan>real study.</AccentSpan>
       </SectionHeading>
@@ -365,14 +377,14 @@ function BuiltForSection() {
         thing — the course you&apos;re actually taking.
       </p>
 
-      <ul className="mt-14 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="mt-14 grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {builtFor.map((f) => (
           <li
             key={f.title}
-            className="rounded-xl border border-hairline p-6 transition-colors hover:border-ink/20 dark:hover:border-white/20"
+            className="flex h-full flex-col rounded-2xl border border-hairline bg-white p-8 transition-all duration-200 hover:border-ink/25 hover:shadow-[inset_0_-2px_0_0_rgb(59_76_255_/_0.2)] dark:bg-[#141414] dark:hover:border-white/25 dark:hover:shadow-[inset_0_-2px_0_0_rgb(90_107_255_/_0.25)]"
           >
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-accent/[0.08] text-accent">
-              <f.icon size={16} strokeWidth={1.75} />
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent dark:bg-accent/15">
+              <f.icon size={18} strokeWidth={1.75} />
             </span>
             <h3 className="mt-5 text-[17px] font-semibold text-ink">
               {f.title}
@@ -394,7 +406,7 @@ function PrivacySection() {
       id="privacy"
       className="mx-auto w-full max-w-6xl px-6 py-20 md:py-28"
     >
-      <Eyebrow>Your materials, your rules</Eyebrow>
+      <Eyebrow icon={ShieldCheck}>Your materials, your rules</Eyebrow>
       <SectionHeading>
         Your notes, <AccentSpan>only your notes.</AccentSpan>
       </SectionHeading>
@@ -454,7 +466,7 @@ function PricingSection() {
       id="pricing"
       className="mx-auto w-full max-w-6xl px-6 py-20 md:py-28"
     >
-      <Eyebrow>Pricing</Eyebrow>
+      <Eyebrow icon={Tag}>Pricing</Eyebrow>
       <SectionHeading>
         Start free. Stay <AccentSpan>free.</AccentSpan>
       </SectionHeading>
@@ -547,7 +559,7 @@ function FAQSection() {
       id="faq"
       className="mx-auto w-full max-w-6xl px-6 py-20 md:py-28"
     >
-      <Eyebrow>FAQ</Eyebrow>
+      <Eyebrow icon={HelpCircle}>FAQ</Eyebrow>
       <SectionHeading>
         Questions, <AccentSpan>plainly answered.</AccentSpan>
       </SectionHeading>
@@ -623,11 +635,23 @@ const primaryButton =
 const secondaryLink =
   "group inline-flex items-center gap-1 rounded-sm text-[14.5px] font-medium text-ink transition-colors hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent";
 
-function Eyebrow({ children }: { children: React.ReactNode }) {
+function Eyebrow({
+  icon: Icon,
+  children,
+}: {
+  icon: LucideIcon;
+  children: React.ReactNode;
+}) {
   return (
-    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-accent">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-white px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted dark:bg-[#141414]">
+      <Icon
+        size={13}
+        strokeWidth={2}
+        aria-hidden="true"
+        className="text-accent"
+      />
       {children}
-    </p>
+    </span>
   );
 }
 
