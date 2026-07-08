@@ -1,26 +1,99 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-paper: #fafaf7;
+  --color-ink: #0a0a0a;
+  --color-muted: #5a5a5a;
+  --color-hairline: #e8e6e0;
+  --color-accent: #3b4cff;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+  --font-serif: var(--font-instrument-serif), ui-serif, Georgia,
+    "Times New Roman", serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.dark {
+  --color-paper: #0a0a0a;
+  --color-ink: #fafaf7;
+  --color-muted: #a0a0a0;
+  --color-hairline: #1f1f1f;
+  --color-accent: #5a6bff;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  color-scheme: light dark;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transition: background-color 200ms ease;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+  color: var(--color-ink);
+}
+
+/* ----- Scroll-in reveal (Reveal component) ----- */
+.reveal {
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity 640ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    transform 640ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ----- Underline that draws in left → right on hover (secondary CTAs) ----- */
+.underline-draw {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  padding-bottom: 2px;
+  transition: background-size 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.group:hover .underline-draw,
+.underline-draw:hover {
+  background-size: 100% 1px;
+}
+
+/* ----- Hero mockup: three typing dots ----- */
+@keyframes typingPulse {
+  0%, 100% { opacity: 0.25; }
+  50%      { opacity: 1; }
+}
+.typing-dot {
+  animation: typingPulse 1.4s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.18s; }
+.typing-dot:nth-child(3) { animation-delay: 0.36s; }
+
+/* ----- Reduced motion: kill loops and transitions, land on final state ----- */
+@media (prefers-reduced-motion: reduce) {
+  html { transition: none; }
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  .underline-draw {
+    transition: none !important;
+    background-size: 100% 1px;
+  }
+  .typing-dot {
+    animation: none !important;
+    opacity: 1 !important;
+  }
 }
