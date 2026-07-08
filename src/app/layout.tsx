@@ -1,3 +1,4 @@
+import {ClerkProvider} from "@clerk/nextjs";
 import type { Metadata, Viewport } from "next";
 import { Inter, Instrument_Serif } from "next/font/google";
 import "./globals.css";
@@ -63,8 +64,10 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-paper text-ink font-sans">
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-        {children}
+        <ClerkProvider>
+          <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+          {children}
+        </ClerkProvider>
       </body>
     </html>
   );
