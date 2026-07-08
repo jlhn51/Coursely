@@ -2,9 +2,9 @@
 
 An AI-native study platform that turns a student's course materials — syllabi, slides, notes, recordings — into an organized, course-aware learning workflow.
 
-**Live app:** [paste your Vercel URL here]
+**Live app:** https://coursely-seven.vercel.app/
 
-> In active development. v1 in progress.
+> v1 in development. Landing page shipped; auth and core flows next.
 
 ---
 
@@ -28,16 +28,18 @@ Coursely unifies the study workflow around the course as a first-class entity. U
 ## Tech stack
 
 - **Framework:** Next.js 15 (App Router)
-- **Language:** TypeScript
+- **Language:** TypeScript (strict)
 - **Styling:** Tailwind CSS + shadcn/ui
+- **Icons:** lucide-react
+- **Fonts:** Instrument Serif (display) + Inter (body) via `next/font/google`
 - **Auth:** Clerk
 - **Database:** Neon (serverless Postgres) with pgvector
 - **ORM:** Drizzle
 - **File storage:** UploadThing
 - **PDF extraction:** pdf-parse
+- **Validation:** Zod
 - **LLM:** Anthropic API (Claude)
 - **Transcription:** OpenAI Whisper API *(v4)*
-- **Validation:** Zod
 - **Hosting:** Vercel
 
 ## Architecture
@@ -54,6 +56,15 @@ The data model centers on the **course**. Every piece of user content — upload
 4. The response is validated with Zod before touching the database.
 5. Topics and tasks are inserted in a single database transaction.
 6. The UI refreshes to show the parsed semester.
+
+## Design
+
+Coursely's visual identity is designed for quiet competence — a serious tool for people doing serious work. The bar is Linear, Notion, Vercel, Lepta Wallet.
+
+- **Palette.** Warm off-white background (`#FAFAF7`), near-black text (`#0A0A0A`), electric blue accent (`#3B4CFF`) used sparingly. Full dark mode with matching contrast ratios.
+- **Typography.** Instrument Serif for the display face (hero headline, section headings, editorial numbers) and Inter for body and UI. Every section heading uses one italicized accent-colored word for chromatic rhythm across the page.
+- **Motion.** Subtle scroll-triggered entrance animations and hover microinteractions. No animation libraries — CSS keyframes and IntersectionObserver only. All motion respects `prefers-reduced-motion`.
+- **Landing page.** Ten sections: nav, hero with product mockup, features, how-it-works, product surfaces, privacy strip, pricing, FAQ, closing CTA, footer. Density and compositional variety over minimalism.
 
 ## Local development
 
