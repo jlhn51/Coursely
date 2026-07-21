@@ -6,18 +6,18 @@ import {
   Image as ImageIcon,
   Presentation,
   Sparkles,
-  Trash2,
   UploadCloud,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import {
-  createMaterial,
-  softDeleteMaterial,
-} from "@/actions/materials";
+import { createMaterial } from "@/actions/materials";
 import { parseSyllabus } from "@/actions/syllabus";
 import { useParsingStatus } from "@/components/app-shell/parsing-provider";
+import {
+  MaterialPreviewModal,
+  type MaterialPreview,
+} from "@/components/material-preview-modal";
 import type { Material } from "@/db/schema";
 import { FILE_CATEGORIES, type FileCategory } from "@/lib/file-categories";
 import { UploadDropzone } from "@/lib/uploadthing";
@@ -38,15 +38,18 @@ type PendingUpload = {
 
 export function MaterialsSection({
   courseId,
+  courseName,
   materials,
   syllabusStatus,
 }: {
   courseId: string;
+  courseName: string;
   materials: Material[];
   syllabusStatus: string;
 }) {
   const router = useRouter();
   const { triggerPoll } = useParsingStatus();
+  const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null);
 
   // Smart default: on an empty course, prime for syllabus upload. Once any
   // material exists, drop back to "other" so users don't accidentally re-tag
@@ -279,35 +282,65 @@ export function MaterialsSection({
       {materials.length > 0 ? (
         <ul className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {materials.map((m) => (
-            <MaterialCard key={m.id} material={m} />
+            <MaterialCard
+              key={m.id}
+              material={m}
+              onPreview={() => setPreviewMaterial(m)}
+            />
           ))}
         </ul>
       ) : null}
+
+      <MaterialPreviewModal
+        material={
+          previewMaterial
+            ? ({
+                id: previewMaterial.id,
+                name: previewMaterial.name,
+                url: previewMaterial.url,
+                fileType: previewMaterial.fileType,
+                fileCategory: previewMaterial.fileCategory,
+                fileSize: previewMaterial.fileSize,
+                courseName,
+                uploadedAt: previewMaterial.uploadedAt,
+                syllabusHasParsedContent:
+                  previewMaterial.fileCategory === "syllabus" &&
+                  syllabusStatus === "parsed",
+              } satisfies MaterialPreview)
+            : null
+        }
+        onClose={() => setPreviewMaterial(null)}
+      />
     </section>
   );
 }
 
-function MaterialCard({ material }: { material: Material }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-
-  function onDelete(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!confirm(`Delete "${material.name}"?`)) return;
-    startTransition(async () => {
-      await softDeleteMaterial({ materialId: material.id });
-      router.refresh();
-    });
-  }
-
+function MaterialCard({
+  material,
+  onPreview,
+}: {
+  material: Material;
+  onPreview: () => void;
+}) {
   return (
     <li>
-      <a
-        href={material.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="group relative flex h-full items-start gap-3 rounded-xl border border-hairline bg-white p-4 transition-colors hover:border-ink/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:bg-[#141414] dark:hover:border-white/25"
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={(e) => {
+          const el = e.target as HTMLElement;
+          if (el.closest("button, a")) return;
+          onPreview();
+        }}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onPreview();
+          }
+        }}
+        aria-label={`Preview ${material.name}`}
+        className="group relative flex h-full cursor-pointer items-start gap-3 rounded-xl border border-hairline bg-white p-4 transition-colors hover:border-ink/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:bg-[#141414] dark:hover:border-white/25"
       >
         <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent/[0.10] text-accent">
           <FileTypeIcon fileType={material.fileType} />
@@ -321,16 +354,7 @@ function MaterialCard({ material }: { material: Material }) {
             {formatSize(material.fileSize)} · {formatDate(material.uploadedAt)}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onDelete}
-          disabled={pending}
-          aria-label="Delete"
-          className="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted opacity-0 transition-opacity hover:bg-red-500/10 hover:text-red-600 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent group-hover:opacity-100 dark:hover:text-red-400"
-        >
-          <Trash2 size={12} strokeWidth={1.75} aria-hidden="true" />
-        </button>
-      </a>
+      </div>
     </li>
   );
 }

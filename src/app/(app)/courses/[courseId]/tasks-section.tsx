@@ -6,14 +6,20 @@ import {
   CheckSquare,
   FileText,
   GraduationCap,
+  type LucideIcon,
+  Pencil,
   Plus,
   ScrollText,
-  X,
+  Trash2,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { createTask, toggleTaskCompletion } from "@/actions/tasks";
+import { toast } from "sonner";
+import { softDeleteTask, updateTask } from "@/actions/tasks";
+import { NewTaskModal } from "@/components/app-shell/new-task-modal";
+import { TaskDrawer, type TaskDrawerTask } from "@/components/task-drawer";
 import type { Task } from "@/db/schema";
-import { TASK_TYPES, type TaskType } from "@/lib/task-types";
+import { type TaskType } from "@/lib/task-types";
 
 type Filter = "all" | "open" | "done" | "week";
 
@@ -36,7 +42,7 @@ const typeLabel: Record<TaskType, string> = {
   other: "Other",
 };
 
-const typeIcon: Record<TaskType, typeof FileText> = {
+const typeIcon: Record<TaskType, LucideIcon> = {
   pset: FileText,
   assignment: FileText,
   exam: GraduationCap,
@@ -50,13 +56,17 @@ const typeIcon: Record<TaskType, typeof FileText> = {
 
 export function TasksSection({
   courseId,
+  courseName,
   tasks,
 }: {
   courseId: string;
+  courseName: string;
   tasks: Task[];
 }) {
   const [filter, setFilter] = useState<Filter>("all");
-  const [showForm, setShowForm] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [drawerTask, setDrawerTask] = useState<Task | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
 
   const counts = useMemo(
     () => ({
@@ -75,6 +85,21 @@ export function TasksSection({
     return tasks;
   }, [tasks, filter]);
 
+  const drawerData: TaskDrawerTask | null = drawerTask
+    ? {
+        id: drawerTask.id,
+        title: drawerTask.title,
+        description: drawerTask.description,
+        courseId,
+        courseName,
+        taskType: drawerTask.taskType,
+        isCompleted: drawerTask.isCompleted,
+        dueDate: drawerTask.dueDate,
+        source: drawerTask.source,
+        createdAt: drawerTask.createdAt,
+      }
+    : null;
+
   return (
     <section id="tasks" className="mt-20 scroll-mt-20 md:mt-28">
       <div className="flex flex-wrap items-baseline justify-between gap-4">
@@ -83,30 +108,13 @@ export function TasksSection({
         </h2>
         <button
           type="button"
-          onClick={() => setShowForm((v) => !v)}
-          aria-expanded={showForm}
+          onClick={() => setModalOpen(true)}
           className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-3.5 py-1.5 text-[13px] font-medium text-ink transition-colors hover:border-ink/30 hover:bg-ink/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:hover:border-white/25 dark:hover:bg-white/[0.04]"
         >
-          {showForm ? (
-            <>
-              <X size={13} aria-hidden="true" />
-              Close
-            </>
-          ) : (
-            <>
-              <Plus size={13} aria-hidden="true" />
-              Add task
-            </>
-          )}
+          <Plus size={13} aria-hidden="true" />
+          Add task
         </button>
       </div>
-
-      {showForm ? (
-        <NewTaskForm
-          courseId={courseId}
-          onSuccess={() => setShowForm(false)}
-        />
-      ) : null}
 
       <div className="mt-6 flex flex-wrap gap-2">
         {filterOptions.map((opt) => {
@@ -141,11 +149,28 @@ export function TasksSection({
         ) : (
           <ul className="divide-y divide-hairline overflow-hidden rounded-2xl border border-hairline bg-white dark:bg-[#141414]">
             {visible.map((task) => (
-              <TaskRow key={task.id} task={task} />
+              <TaskRow
+                key={task.id}
+                task={task}
+                onOpen={setDrawerTask}
+                onRequestDelete={setPendingDelete}
+              />
             ))}
           </ul>
         )}
       </div>
+
+      <NewTaskModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        courses={[{ id: courseId, name: courseName }]}
+        defaultCourseId={courseId}
+      />
+      <TaskDrawer task={drawerData} onClose={() => setDrawerTask(null)} />
+      <ConfirmDelete
+        task={pendingDelete}
+        onClose={() => setPendingDelete(null)}
+      />
     </section>
   );
 }
@@ -166,38 +191,86 @@ function EmptyTasks({ filter }: { filter: Filter }) {
   );
 }
 
-function TaskRow({ task }: { task: Task }) {
+function TaskRow({
+  task,
+  onOpen,
+  onRequestDelete,
+}: {
+  task: Task;
+  onOpen: (task: Task) => void;
+  onRequestDelete: (task: Task) => void;
+}) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
-  function onToggle() {
-    setError(null);
-    startTransition(async () => {
-      const result = await toggleTaskCompletion({ taskId: task.id });
-      if ("error" in result && result.error) setError(result.error);
-    });
-  }
-
+  const [optimisticCompleted, setOptimisticCompleted] = useState(
+    task.isCompleted,
+  );
   const type = (task.taskType as TaskType) ?? "other";
   const Icon = typeIcon[type] ?? CheckSquare;
 
+  function onToggle() {
+    const next = !optimisticCompleted;
+    setOptimisticCompleted(next);
+    startTransition(async () => {
+      const r = await updateTask({
+        taskId: task.id,
+        title: task.title,
+        description: task.description ?? undefined,
+        taskType: type,
+        dueDate: task.dueDate ? task.dueDate.toISOString() : "",
+        isCompleted: next,
+      });
+      if ("error" in r && r.error) {
+        setOptimisticCompleted(!next);
+        toast.error("Couldn't update", { description: r.error });
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  function handleRowClick(e: React.MouseEvent<HTMLLIElement>) {
+    const el = e.target as HTMLElement;
+    if (el.closest("button, a, input, label, select, textarea")) return;
+    onOpen(task);
+  }
+
+  function handleRowKey(e: React.KeyboardEvent<HTMLLIElement>) {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onOpen(task);
+    } else if (e.key === " ") {
+      e.preventDefault();
+      onToggle();
+    } else if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      onRequestDelete(task);
+    }
+  }
+
   return (
-    <li className="flex items-start gap-4 p-4">
+    <li
+      role="button"
+      tabIndex={0}
+      onClick={handleRowClick}
+      onKeyDown={handleRowKey}
+      aria-label={`Open ${task.title}`}
+      className="group flex cursor-pointer items-start gap-4 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent hover:bg-paper dark:hover:bg-[#0f0f10]"
+    >
       <button
         type="button"
         onClick={onToggle}
         disabled={pending}
-        aria-pressed={task.isCompleted}
-        aria-label={
-          task.isCompleted ? "Mark as not done" : "Mark as done"
-        }
+        aria-pressed={optimisticCompleted}
+        aria-label={optimisticCompleted ? "Mark as not done" : "Mark as done"}
         className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-          task.isCompleted
+          optimisticCompleted
             ? "border-accent bg-accent text-white"
             : "border-hairline hover:border-accent/60"
         } ${pending ? "opacity-60" : ""}`}
       >
-        {task.isCompleted ? (
+        {optimisticCompleted ? (
           <Check size={12} strokeWidth={2.5} aria-hidden="true" />
         ) : null}
       </button>
@@ -206,7 +279,7 @@ function TaskRow({ task }: { task: Task }) {
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <p
             className={`text-[14.5px] font-medium ${
-              task.isCompleted
+              optimisticCompleted
                 ? "text-muted line-through decoration-hairline"
                 : "text-ink"
             }`}
@@ -223,18 +296,13 @@ function TaskRow({ task }: { task: Task }) {
             {task.description}
           </p>
         ) : null}
-        {error ? (
-          <p role="alert" className="mt-1 text-[12px] text-red-600 dark:text-red-400">
-            {error}
-          </p>
-        ) : null}
       </div>
 
       <div className="shrink-0 text-right text-[12.5px]">
         {task.dueDate ? (
           <p
             className={
-              task.isCompleted
+              optimisticCompleted
                 ? "text-muted"
                 : isOverdue(task.dueDate)
                   ? "font-medium text-red-600 dark:text-red-400"
@@ -249,156 +317,90 @@ function TaskRow({ task }: { task: Task }) {
           <p className="text-muted">No date</p>
         )}
       </div>
+
+      <div className="flex shrink-0 items-center gap-1 self-center opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        <button
+          type="button"
+          onClick={() => onOpen(task)}
+          aria-label="Edit"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-ink/[0.05] hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:hover:bg-white/[0.06]"
+        >
+          <Pencil size={12} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onRequestDelete(task)}
+          aria-label="Delete"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-red-500/10 hover:text-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:hover:text-red-400"
+        >
+          <Trash2 size={12} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+      </div>
     </li>
   );
 }
 
-function NewTaskForm({
-  courseId,
-  onSuccess,
+function ConfirmDelete({
+  task,
+  onClose,
 }: {
-  courseId: string;
-  onSuccess: () => void;
+  task: Task | null;
+  onClose: () => void;
 }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
+  if (!task) return null;
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        const fd = new FormData(e.currentTarget);
-        setError(null);
-        startTransition(async () => {
-          const result = await createTask({
-            courseId,
-            title: String(fd.get("title") ?? ""),
-            description: String(fd.get("description") ?? ""),
-            taskType: (String(fd.get("taskType") ?? "other") as TaskType),
-            dueDate: String(fd.get("dueDate") ?? ""),
-          });
-          if ("error" in result && result.error) {
-            setError(result.error);
-            return;
-          }
-          (e.target as HTMLFormElement).reset();
-          onSuccess();
-        });
-      }}
-      className="mt-6 rounded-2xl border border-hairline bg-white p-6 dark:bg-[#141414]"
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
     >
-      <fieldset disabled={pending} className="space-y-5">
-        <FormField
-          name="title"
-          label="Title"
-          placeholder="PSet 4 · Backpropagation"
-          required
-          autoFocus
-        />
-
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <label className="block">
-            <span className="text-[13px] font-medium text-ink">Type</span>
-            <select
-              name="taskType"
-              defaultValue="other"
-              className="mt-2 block w-full rounded-md border border-hairline bg-white px-3 py-2.5 text-[14px] text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 dark:bg-[#0f0f10]"
-            >
-              {TASK_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {typeLabel[t]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="flex items-baseline justify-between">
-              <span className="text-[13px] font-medium text-ink">Due date</span>
-              <span className="text-[11.5px] text-muted">Optional</span>
-            </span>
-            <input
-              type="date"
-              name="dueDate"
-              className="mt-2 block w-full rounded-md border border-hairline bg-white px-3 py-2.5 text-[14px] text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 dark:bg-[#0f0f10] dark:[color-scheme:dark]"
-            />
-          </label>
-        </div>
-
-        <label className="block">
-          <span className="flex items-baseline justify-between">
-            <span className="text-[13px] font-medium text-ink">Description</span>
-            <span className="text-[11.5px] text-muted">Optional</span>
-          </span>
-          <textarea
-            name="description"
-            rows={3}
-            placeholder="Notes, links, anything worth remembering."
-            className="mt-2 block w-full resize-y rounded-md border border-hairline bg-white px-3 py-2.5 text-[14px] text-ink placeholder:text-muted/70 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 dark:bg-[#0f0f10]"
-          />
-        </label>
-
-        {error ? (
-          <p
-            role="alert"
-            className="rounded-md border border-red-500/30 bg-red-500/[0.06] px-3 py-2 text-[13px] text-red-600 dark:text-red-400"
-          >
-            {error}
-          </p>
-        ) : null}
-
-        <div className="flex items-center gap-3 border-t border-hairline pt-5">
-          <button
-            type="submit"
-            className="inline-flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 text-[13.5px] font-medium text-white transition-all duration-200 hover:-translate-y-px hover:bg-[#2e3fef] hover:shadow-[0_10px_24px_-8px_rgb(59_76_255_/_0.55)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-60 dark:hover:bg-[#6a7bff]"
-          >
-            {pending ? "Adding…" : "Add task"}
-          </button>
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+      />
+      <div className="relative z-10 w-full max-w-sm rounded-2xl border border-hairline bg-white p-6 shadow-2xl dark:bg-[#141414]">
+        <h3 className="font-serif text-[20px] leading-tight text-ink">
+          Delete this task?
+        </h3>
+        <p className="mt-2 text-[13.5px] text-muted">
+          &ldquo;{task.title}&rdquo; will be removed from your task list.
+        </p>
+        <div className="mt-5 flex items-center justify-end gap-3">
           <button
             type="button"
-            onClick={onSuccess}
+            disabled={pending}
+            onClick={onClose}
             className="rounded-sm text-[13.5px] font-medium text-muted transition-colors hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             Cancel
           </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              startTransition(async () => {
+                const r = await softDeleteTask({ taskId: task.id });
+                if ("error" in r && r.error) {
+                  toast.error("Couldn't delete", { description: r.error });
+                  return;
+                }
+                toast.success("Task deleted");
+                router.refresh();
+                onClose();
+              });
+            }}
+            className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-[13.5px] font-medium text-white transition-colors hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
+          >
+            <Trash2 size={12} strokeWidth={2} aria-hidden="true" />
+            {pending ? "Deleting…" : "Delete"}
+          </button>
         </div>
-      </fieldset>
-    </form>
-  );
-}
-
-function FormField({
-  name,
-  label,
-  placeholder,
-  required,
-  autoFocus,
-}: {
-  name: string;
-  label: string;
-  placeholder?: string;
-  required?: boolean;
-  autoFocus?: boolean;
-}) {
-  return (
-    <label className="block">
-      <span className="text-[13px] font-medium text-ink">
-        {label}
-        {required ? (
-          <span aria-hidden="true" className="ml-1 text-accent">
-            *
-          </span>
-        ) : null}
-      </span>
-      <input
-        name={name}
-        type="text"
-        required={required}
-        placeholder={placeholder}
-        autoFocus={autoFocus}
-        autoComplete="off"
-        className="mt-2 block w-full rounded-md border border-hairline bg-white px-3 py-2.5 text-[14.5px] text-ink placeholder:text-muted/70 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 dark:bg-[#0f0f10]"
-      />
-    </label>
+      </div>
+    </div>
   );
 }
 

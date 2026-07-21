@@ -1,5 +1,6 @@
 "use client";
 
+import { UserButton } from "@clerk/nextjs";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { SidebarNav } from "./sidebar-nav";
@@ -51,6 +52,35 @@ export function SidebarShell() {
       <div className="flex-1 overflow-y-auto">
         <SidebarNav collapsed={collapsed} />
       </div>
+
+      {/* One user surface across the app: the sidebar footer mirrors the
+          top-right avatar — same Clerk UserButton, same initial, same color.
+          `showName` fills the strip when expanded; collapsed drops to just
+          the avatar. */}
+      <div
+        className={`shrink-0 border-t border-hairline ${collapsed ? "px-2 py-2" : "px-3 py-3"}`}
+      >
+        <div
+          className={`flex items-center ${collapsed ? "justify-center" : "gap-2"}`}
+          data-user-button-collapsed={collapsed ? "true" : "false"}
+        >
+          <UserButton
+            showName={!collapsed}
+            appearance={{
+              elements: {
+                rootBox: "w-full",
+                userButtonBox: collapsed
+                  ? "flex-row-reverse"
+                  : "flex-row-reverse w-full justify-end gap-2",
+                userButtonOuterIdentifier:
+                  "text-[13px] font-medium text-ink truncate max-w-[140px]",
+                avatarBox: "h-7 w-7",
+              },
+            }}
+          />
+        </div>
+      </div>
+
       <div
         className={`shrink-0 border-t border-hairline py-2 ${collapsed ? "px-2" : "px-3"}`}
       >

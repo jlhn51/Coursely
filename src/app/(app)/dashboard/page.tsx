@@ -55,7 +55,9 @@ export default async function DashboardPage() {
   const [user, coursesList, tasksAll, materialsAll] = await Promise.all([
     currentUser(),
     getUserCourses(),
-    getUserTasks(100),
+    // 500 keeps overdue tasks visible even for busy semesters. The per-course
+    // status helper needs the full set to agree with the course-detail page.
+    getUserTasks(500),
     getUserMaterials(20),
   ]);
 
@@ -65,13 +67,16 @@ export default async function DashboardPage() {
   // as a greeting.
   const preferredName =
     typeof user?.unsafeMetadata?.preferredName === "string"
-      ? user.unsafeMetadata.preferredName.trim()
-      : "";
-  const clerkFirstName = user?.firstName?.trim() ?? "";
-  const firstNameFirstWord = clerkFirstName.split(/\s+/)[0] ?? "";
-  const fullNameFirstWord = user?.fullName?.trim().split(/\s+/)[0] ?? "";
+      ? user.unsafeMetadata.preferredName.trim() || undefined
+      : undefined;
+  const firstWord = (s?: string | null): string | undefined =>
+    s?.trim().split(/\s+/)[0] || undefined;
   const firstName =
-    preferredName || firstNameFirstWord || fullNameFirstWord || "there";
+    preferredName ||
+    firstWord(user?.firstName) ||
+    firstWord(user?.fullName) ||
+    "there";
+  const clerkFirstName = user?.firstName?.trim() ?? "";
 
   // Nudge: firstName has whitespace AND user hasn't set a preferredName. The
   // dashboard shows a soft banner; the client marks it "dismissed" in
@@ -84,11 +89,10 @@ export default async function DashboardPage() {
   const totalTasks = tasksAll.length;
   const completedTasks = tasksAll.filter((t) => t.isCompleted).length;
 
-  // getUserCourses is desc(createdAt) — oldest is the tail.
-  const oldestCourseCreatedAt = hasCourses
-    ? coursesList[coursesList.length - 1]!.createdAt
-    : null;
-  const semester = semesterProgress(oldestCourseCreatedAt, now);
+  const semester = semesterProgress(
+    coursesList.map((c) => ({ startDate: c.startDate, endDate: c.endDate })),
+    now,
+  );
 
   const greeting = pickGreeting({
     hasCourses,
@@ -130,7 +134,11 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <ThisWeekCard windows={windows} upcoming={upcoming} now={now} />
           <StudyFocusCard nextTask={nextTask} now={now} />
-          <SemesterPulseCard semester={semester} />
+          <SemesterPulseCard
+            semester={semester}
+            hasCourses={hasCourses}
+            newestCourseId={newestCourseId}
+          />
         </div>
       </Reveal>
 
@@ -441,8 +449,17 @@ function StudyFocusCard({
   );
 }
 
-function SemesterPulseCard({ semester }: { semester: SemesterProgress }) {
+function SemesterPulseCard({
+  semester,
+  hasCourses,
+  newestCourseId,
+}: {
+  semester: SemesterProgress;
+  hasCourses: boolean;
+  newestCourseId?: string;
+}) {
   const pct = Math.round(semester.pct * 100);
+  const showProgressBar = semester.state !== "unset";
   return (
     <div className={cardShell}>
       <div className="flex items-center gap-2">
@@ -457,20 +474,30 @@ function SemesterPulseCard({ semester }: { semester: SemesterProgress }) {
       <p className="mt-4 font-serif text-[30px] leading-[1.05] text-ink md:text-[34px]">
         {semester.weekLabel}
       </p>
-      <div
-        className="mt-5 h-1 w-full overflow-hidden rounded-full bg-hairline"
-        role="progressbar"
-        aria-valuenow={pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label="Semester progress"
-      >
+      {showProgressBar ? (
         <div
-          className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
+          className="mt-5 h-1 w-full overflow-hidden rounded-full bg-hairline"
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Semester progress"
+        >
+          <div
+            className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      ) : null}
       <p className="mt-auto pt-5 text-[12.5px] text-muted">{semester.note}</p>
+      {semester.state === "unset" && hasCourses && newestCourseId ? (
+        <Link
+          href={`/courses/${newestCourseId}`}
+          className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-accent hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          Add semester dates <span aria-hidden="true">→</span>
+        </Link>
+      ) : null}
     </div>
   );
 }

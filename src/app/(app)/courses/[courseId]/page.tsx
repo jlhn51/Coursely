@@ -13,6 +13,9 @@ import { getCourseTasks } from "@/actions/tasks";
 import { getCourseTopics } from "@/actions/topics";
 import { db } from "@/db";
 import { type Course, courses, type Task } from "@/db/schema";
+import { Breadcrumbs } from "@/components/breadcrumbs";
+import { computeCourseStatus } from "@/lib/course-status";
+import { CourseHeaderMenu } from "./course-header-menu";
 import { JustUploadedScroll } from "./just-uploaded-scroll";
 import { MaterialsSection } from "./materials-section";
 import { SyllabusBanner } from "./syllabus-banner";
@@ -129,9 +132,14 @@ export default async function CourseDetailPage({
         topics={topics}
         syllabusTaskCount={syllabusTaskCount}
       />
-      <TasksSection courseId={course.id} tasks={tasks} />
+      <TasksSection
+        courseId={course.id}
+        courseName={course.name}
+        tasks={tasks}
+      />
       <MaterialsSection
         courseId={course.id}
+        courseName={course.name}
         materials={materials}
         syllabusStatus={course.syllabusStatus}
       />
@@ -150,17 +158,26 @@ function Header({
 }) {
   return (
     <header>
-      <p className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted">
+      <Breadcrumbs
+        items={[
+          { label: "Courses", href: "/courses" },
+          { label: course.name },
+        ]}
+      />
+      <p className="mt-4 text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted">
         {eyebrow}
       </p>
-      <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-2">
-        <h1 className="font-serif text-[40px] leading-[1.05] text-ink md:text-[56px]">
-          {course.name}
-        </h1>
-        <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-white px-2.5 py-0.5 text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted dark:bg-[#141414]">
-          <Sparkles size={11} strokeWidth={2} aria-hidden="true" className="text-accent" />
-          Beta
-        </span>
+      <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-2">
+          <h1 className="font-serif text-[40px] leading-[1.05] text-ink md:text-[56px]">
+            {course.name}
+          </h1>
+          <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-white px-2.5 py-0.5 text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted dark:bg-[#141414]">
+            <Sparkles size={11} strokeWidth={2} aria-hidden="true" className="text-accent" />
+            Beta
+          </span>
+        </div>
+        <CourseHeaderMenu course={course} />
       </div>
       {course.professor || course.semester ? (
         <p className="mt-3 text-[14.5px] text-muted">
@@ -237,42 +254,35 @@ function ZoneCard({
 
 // ---------- Eyebrow logic ----------
 
+// The base overdue/attention/clear state comes from the shared helper so the
+// dashboard card and this eyebrow can never disagree. Only the nuance copy
+// ("Something due today" vs "Exam this week") is decided here.
 function pickEyebrow(courseTasks: Task[], now: Date): string {
-  const open = courseTasks.filter((t) => !t.isCompleted && t.dueDate);
-
   if (courseTasks.length === 0) return "No deadlines yet.";
+  const status = computeCourseStatus(courseTasks, now);
+  if (status.level === "overdue") return "Overdue items in this class.";
+  if (status.level === "attention") {
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfTomorrow = new Date(startOfToday);
+    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+    const in7Days = new Date(startOfToday);
+    in7Days.setDate(in7Days.getDate() + 7);
 
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  const startOfTomorrow = new Date(startOfToday);
-  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
-  const in3Days = new Date(startOfToday);
-  in3Days.setDate(in3Days.getDate() + 3);
-  const in7Days = new Date(startOfToday);
-  in7Days.setDate(in7Days.getDate() + 7);
-
-  const dueToday = open.some(
-    (t) =>
-      t.dueDate! >= startOfToday && t.dueDate! < startOfTomorrow,
-  );
-  if (dueToday) return "Something due today.";
-
-  const hasOverdue = open.some((t) => t.dueDate! < startOfToday);
-  if (hasOverdue) return "Overdue items in this class.";
-
-  const examSoon = open.some(
-    (t) =>
-      t.taskType === "exam" &&
-      t.dueDate! >= startOfToday &&
-      t.dueDate! < in7Days,
-  );
-  if (examSoon) return "Exam this week.";
-
-  const dueSoon = open.some(
-    (t) => t.dueDate! >= startOfToday && t.dueDate! < in3Days,
-  );
-  if (dueSoon) return "Deadline coming up.";
-
+    const open = courseTasks.filter((t) => !t.isCompleted && t.dueDate);
+    const dueToday = open.some(
+      (t) => t.dueDate! >= startOfToday && t.dueDate! < startOfTomorrow,
+    );
+    if (dueToday) return "Something due today.";
+    const examSoon = open.some(
+      (t) =>
+        t.taskType === "exam" &&
+        t.dueDate! >= startOfToday &&
+        t.dueDate! < in7Days,
+    );
+    if (examSoon) return "Exam this week.";
+    return "Deadline coming up.";
+  }
   return "In session.";
 }
 

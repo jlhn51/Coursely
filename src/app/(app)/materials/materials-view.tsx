@@ -2,7 +2,6 @@
 
 import {
   ChevronDown,
-  ExternalLink,
   File as FileIcon,
   FileText,
   Filter,
@@ -15,9 +14,14 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { softDeleteMaterial } from "@/actions/materials";
 import { UploadMaterialModal } from "@/components/app-shell/upload-material-modal";
 import type { CourseOption } from "@/components/course-picker";
+import {
+  MaterialPreviewModal,
+  type MaterialPreview,
+} from "@/components/material-preview-modal";
 import { Reveal } from "@/components/reveal";
 
 export type MaterialRow = {
@@ -52,6 +56,9 @@ export function MaterialsView({
   const [filter, setFilter] = useState<FilterValue>("all");
   const [courseFilter, setCourseFilter] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
+  const [previewMaterial, setPreviewMaterial] = useState<MaterialRow | null>(
+    null,
+  );
 
   const filtered = useMemo(() => {
     let list = materials.slice();
@@ -124,7 +131,11 @@ export function MaterialsView({
           ) : (
             <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((m) => (
-                <MaterialCard key={m.id} material={m} />
+                <MaterialCard
+                  key={m.id}
+                  material={m}
+                  onPreview={() => setPreviewMaterial(m)}
+                />
               ))}
             </ul>
           )}
@@ -135,6 +146,10 @@ export function MaterialsView({
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         courses={courses}
+      />
+      <MaterialPreviewModal
+        material={previewMaterial as MaterialPreview | null}
+        onClose={() => setPreviewMaterial(null)}
       />
     </div>
   );
@@ -211,20 +226,50 @@ function CourseFilter({
   );
 }
 
-function MaterialCard({ material }: { material: MaterialRow }) {
+function MaterialCard({
+  material,
+  onPreview,
+}: {
+  material: MaterialRow;
+  onPreview: () => void;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
   function onDelete() {
-    if (!confirm(`Delete "${material.name}"?`)) return;
     startTransition(async () => {
-      await softDeleteMaterial({ materialId: material.id });
+      const r = await softDeleteMaterial({ materialId: material.id });
+      if ("error" in r && r.error) {
+        toast.error("Couldn't delete", { description: r.error });
+        return;
+      }
+      toast.success("Material deleted");
+      setConfirmOpen(false);
       router.refresh();
     });
   }
 
   return (
     <li>
-      <div className="group relative flex h-full items-start gap-3 rounded-2xl border border-hairline bg-white p-4 transition-colors hover:border-ink/25 dark:bg-[#141414] dark:hover:border-white/25">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={(e) => {
+          const el = e.target as HTMLElement;
+          if (el.closest("button, a, input")) return;
+          onPreview();
+        }}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onPreview();
+          }
+        }}
+        aria-label={`Preview ${material.name}`}
+        className="group relative flex h-full cursor-pointer items-start gap-3 rounded-2xl border border-hairline bg-white p-4 transition-colors hover:border-ink/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:bg-[#141414] dark:hover:border-white/25"
+      >
         <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-accent/[0.10] text-accent">
           <FileTypeIcon fileType={material.fileType} />
         </span>
@@ -235,6 +280,7 @@ function MaterialCard({ material }: { material: MaterialRow }) {
           <p className="mt-0.5 text-[11.5px] text-muted">
             <Link
               href={`/courses/${material.courseId}`}
+              onClick={(e) => e.stopPropagation()}
               className="hover:text-ink hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               {material.courseName}
@@ -245,19 +291,13 @@ function MaterialCard({ material }: { material: MaterialRow }) {
             <span aria-hidden="true">·</span>
             <span>{formatDate(new Date(material.uploadedAt))}</span>
           </p>
-          <a
-            href={material.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-flex items-center gap-1 text-[12px] font-medium text-accent transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            <ExternalLink size={11} strokeWidth={2} aria-hidden="true" />
-            Open file
-          </a>
         </div>
         <button
           type="button"
-          onClick={onDelete}
+          onClick={(e) => {
+            e.stopPropagation();
+            setConfirmOpen(true);
+          }}
           disabled={pending}
           aria-label="Delete material"
           className="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted opacity-0 transition-opacity hover:bg-red-500/10 hover:text-red-600 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent group-hover:opacity-100 dark:hover:text-red-400"
@@ -265,6 +305,49 @@ function MaterialCard({ material }: { material: MaterialRow }) {
           <Trash2 size={12} strokeWidth={1.75} aria-hidden="true" />
         </button>
       </div>
+
+      {confirmOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+        >
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={() => setConfirmOpen(false)}
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          />
+          <div className="relative z-10 w-full max-w-sm rounded-2xl border border-hairline bg-white p-6 shadow-2xl dark:bg-[#141414]">
+            <h3 className="font-serif text-[20px] leading-tight text-ink">
+              Delete this material?
+            </h3>
+            <p className="mt-2 text-[13.5px] text-muted">
+              &ldquo;{material.name}&rdquo; will be removed from{" "}
+              {material.courseName}.
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => setConfirmOpen(false)}
+                className="rounded-sm text-[13.5px] font-medium text-muted transition-colors hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={onDelete}
+                className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-[13.5px] font-medium text-white transition-colors hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
+              >
+                <Trash2 size={12} strokeWidth={2} aria-hidden="true" />
+                {pending ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </li>
   );
 }

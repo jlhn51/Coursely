@@ -1,5 +1,15 @@
 import type { Task } from "@/db/schema";
 
+// Re-exported so existing dashboard imports don't need to change paths when
+// the shared helper moved to its own module.
+export {
+  computeCourseStatus,
+  statusDotColor,
+  statusShortText,
+  type CourseStatus,
+  type CourseStatusLevel,
+} from "@/lib/course-status";
+
 // ---------- shared date helpers ----------
 
 export function startOfDay(d: Date): Date {
@@ -135,68 +145,145 @@ export function pickSubtitle(input: {
 
 // ---------- semester progress ----------
 
-export type SemesterProgress = {
-  weekLabel: string;
-  pct: number; // 0..1
-  note: string;
-};
+// State machine for the SEMESTER PULSE card. `unset` means no course has
+// startDate + endDate populated yet; the UI shows a nudge to add dates.
+// `before`/`during`/`after` all supply real numbers when we have them.
+export type SemesterProgress =
+  | { state: "unset"; weekLabel: string; pct: 0; note: string }
+  | {
+      state: "before";
+      weekLabel: string;
+      pct: 0;
+      note: string;
+      startDate: Date;
+    }
+  | {
+      state: "during";
+      weekLabel: string;
+      pct: number;
+      note: string;
+      currentWeek: number;
+      totalWeeks: number;
+    }
+  | {
+      state: "after";
+      weekLabel: string;
+      pct: 1;
+      note: string;
+      endDate: Date;
+    };
 
-export function semesterProgress(
-  anchor: Date | null,
+type SemesterRange = { start: Date; end: Date };
+
+// Pick the semester envelope across courses. We collect every course with
+// both dates set and prefer one that is currently active (today ∈ [start,end]).
+// Falls back to the nearest upcoming, then the most recently ended.
+function pickSemesterRange(
+  courseDates: { startDate: Date | null; endDate: Date | null }[],
   now: Date,
-): SemesterProgress {
-  if (!anchor) {
-    return {
-      weekLabel: "Week —",
-      pct: 0,
-      note: "Add a course to start the clock.",
-    };
+): SemesterRange | null {
+  const ranges = courseDates
+    .filter(
+      (c): c is { startDate: Date; endDate: Date } =>
+        !!c.startDate && !!c.endDate && c.endDate >= c.startDate,
+    )
+    .map((c) => ({ start: c.startDate, end: c.endDate }));
+  if (ranges.length === 0) return null;
+
+  const today = startOfDay(now);
+  const active = ranges.filter((r) => r.start <= today && today <= r.end);
+  if (active.length > 0) {
+    // Widen to the union of concurrent semesters so the pulse still tracks
+    // the whole term when a student has two overlapping courses.
+    const start = new Date(
+      Math.min(...active.map((r) => startOfDay(r.start).getTime())),
+    );
+    const end = new Date(
+      Math.max(...active.map((r) => startOfDay(r.end).getTime())),
+    );
+    return { start, end };
   }
-  const days = Math.floor(
-    (startOfDay(now).getTime() - startOfDay(anchor).getTime()) /
-      (1000 * 60 * 60 * 24),
-  );
-  const week = Math.floor(days / 7) + 1;
-  if (week < 1 || week > 14) {
-    return {
-      weekLabel: "Week —",
-      pct: 0,
-      note: "Off-cycle. Track deadlines as they come.",
-    };
-  }
-  const pct = Math.min(1, Math.max(0, week / 14));
-  const note =
-    week <= 4
-      ? "Early days. Set the pace."
-      : week <= 9
-        ? "Halfway through. Momentum matters."
-        : "Home stretch. Finish strong.";
-  return { weekLabel: `Week ${week} of 14`, pct, note };
+
+  const upcoming = ranges
+    .filter((r) => r.start > today)
+    .sort((a, b) => a.start.getTime() - b.start.getTime())[0];
+  if (upcoming) return upcoming;
+
+  const past = ranges
+    .filter((r) => r.end < today)
+    .sort((a, b) => b.end.getTime() - a.end.getTime())[0];
+  return past ?? null;
 }
 
-// ---------- per-course status dot ----------
+function formatSemesterDate(d: Date, now: Date): string {
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: d.getFullYear() === now.getFullYear() ? undefined : "numeric",
+  });
+}
 
-export type CourseStatus = {
-  level: "red" | "amber" | "green";
-  text: string;
-};
-
-export function courseStatus(
-  courseTasks: Pick<Task, "dueDate" | "isCompleted">[],
+export function semesterProgress(
+  courseDates: { startDate: Date | null; endDate: Date | null }[],
   now: Date,
-): CourseStatus {
-  const t0 = startOfDay(now);
-  const t7 = addDays(t0, 7);
-  let overdue = 0;
-  let week = 0;
-  for (const t of courseTasks) {
-    if (t.isCompleted || !t.dueDate) continue;
-    if (t.dueDate < t0) overdue += 1;
-    else if (t.dueDate < t7) week += 1;
+): SemesterProgress {
+  const range = pickSemesterRange(courseDates, now);
+  if (!range) {
+    return {
+      state: "unset",
+      weekLabel: "No dates",
+      pct: 0,
+      note: "Add semester dates to your courses to track weekly progress.",
+    };
   }
-  if (overdue > 0) return { level: "red", text: `${overdue} overdue` };
-  if (week > 0) return { level: "amber", text: `${week} due this week` };
-  return { level: "green", text: "All clear" };
+
+  const today = startOfDay(now);
+  const start = startOfDay(range.start);
+  const end = startOfDay(range.end);
+
+  if (today < start) {
+    return {
+      state: "before",
+      weekLabel: `Starting ${formatSemesterDate(start, now)}`,
+      pct: 0,
+      note: "The clock hasn't started yet. Get set up.",
+      startDate: start,
+    };
+  }
+
+  if (today > end) {
+    return {
+      state: "after",
+      weekLabel: "Semester over",
+      pct: 1,
+      note: `Ended ${formatSemesterDate(end, now)}. Nice work.`,
+      endDate: end,
+    };
+  }
+
+  const dayMs = 1000 * 60 * 60 * 24;
+  const spanDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / dayMs) + 1);
+  const totalWeeks = Math.max(1, Math.ceil(spanDays / 7));
+  const daysIn = Math.max(
+    0,
+    Math.floor((today.getTime() - start.getTime()) / dayMs),
+  );
+  const currentWeek = Math.min(totalWeeks, Math.floor(daysIn / 7) + 1);
+  const pct = Math.min(1, Math.max(0, (daysIn + 1) / spanDays));
+  const note =
+    currentWeek <= Math.ceil(totalWeeks / 3)
+      ? "Early days. Set the pace."
+      : currentWeek <= Math.ceil((2 * totalWeeks) / 3)
+        ? "Halfway through. Momentum matters."
+        : "Home stretch. Finish strong.";
+  return {
+    state: "during",
+    weekLabel: `Week ${currentWeek} of ${totalWeeks}`,
+    pct,
+    note,
+    currentWeek,
+    totalWeeks,
+  };
 }
 
 // ---------- urgency ----------

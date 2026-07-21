@@ -2,7 +2,12 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 import type { UserTaskRow } from "@/actions/tasks";
 import type { Course } from "@/db/schema";
-import { courseStatus, formatDueShort } from "@/lib/dashboard";
+import {
+  computeCourseStatus,
+  statusDotColor,
+  statusShortText,
+} from "@/lib/course-status";
+import { formatDueShort } from "@/lib/dashboard";
 
 export function CourseCard({
   course,
@@ -13,13 +18,9 @@ export function CourseCard({
   tasks: UserTaskRow[];
   now: Date;
 }) {
-  const status = courseStatus(tasks, now);
-  const dotColor =
-    status.level === "red"
-      ? "bg-red-500"
-      : status.level === "amber"
-        ? "bg-amber-500"
-        : "bg-emerald-500";
+  const status = computeCourseStatus(tasks, now);
+  const dotColor = statusDotColor(status.level);
+  const statusText = statusShortText(status);
 
   const next =
     tasks
@@ -51,7 +52,7 @@ export function CourseCard({
           aria-hidden="true"
           className={`h-2 w-2 rounded-full ${dotColor}`}
         />
-        <span className="text-[12.5px] text-muted">{status.text}</span>
+        <span className="text-[12.5px] text-muted">{statusText}</span>
       </div>
 
       {next ? (

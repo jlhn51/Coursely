@@ -69,32 +69,30 @@ export function CommandPalette({
     };
   }, []);
 
-  const searchItems: SearchItem[] = [
-    ...courses.map((c) => ({
-      id: `course-${c.id}`,
-      label: c.name,
-      hint: "Course",
-      href: `/courses/${c.id}`,
-      category: "Courses",
-      icon: BookOpen,
-    })),
-    ...tasks.map((t) => ({
-      id: `task-${t.id}`,
-      label: t.title,
-      hint: t.courseName,
-      href: `/courses/${t.courseId}#tasks`,
-      category: "Tasks",
-      icon: CheckSquare,
-    })),
-    ...materials.map((m) => ({
-      id: `material-${m.id}`,
-      label: m.name,
-      hint: m.courseName,
-      href: `/courses/${m.courseId}#materials`,
-      category: "Materials",
-      icon: FileText,
-    })),
-  ];
+  const courseItems: SearchItem[] = courses.map((c) => ({
+    id: `course-${c.id}`,
+    label: c.name,
+    hint: "Course",
+    href: `/courses/${c.id}`,
+    category: "Courses",
+    icon: BookOpen,
+  }));
+  const taskItems: SearchItem[] = tasks.slice(0, 10).map((t) => ({
+    id: `task-${t.id}`,
+    label: t.title,
+    hint: t.courseName,
+    href: `/courses/${t.courseId}#tasks`,
+    category: "Tasks",
+    icon: CheckSquare,
+  }));
+  const materialItems: SearchItem[] = materials.slice(0, 10).map((m) => ({
+    id: `material-${m.id}`,
+    label: m.name,
+    hint: m.courseName,
+    href: `/courses/${m.courseId}#materials`,
+    category: "Materials",
+    icon: FileText,
+  }));
 
   function go(href: string) {
     close();
@@ -212,9 +210,39 @@ export function CommandPalette({
                   />
                 </Group>
 
-                {searchItems.length > 0 ? (
-                  <Group label="Search">
-                    {searchItems.map((s) => (
+                {courseItems.length > 0 ? (
+                  <Group label="Courses">
+                    {courseItems.map((s) => (
+                      <Item
+                        key={s.id}
+                        value={`${s.label} ${s.hint} ${s.category}`}
+                        icon={s.icon}
+                        label={s.label}
+                        hint={s.hint}
+                        onSelect={() => go(s.href)}
+                      />
+                    ))}
+                  </Group>
+                ) : null}
+
+                {taskItems.length > 0 ? (
+                  <Group label="Tasks">
+                    {taskItems.map((s) => (
+                      <Item
+                        key={s.id}
+                        value={`${s.label} ${s.hint} ${s.category}`}
+                        icon={s.icon}
+                        label={s.label}
+                        hint={s.hint}
+                        onSelect={() => go(s.href)}
+                      />
+                    ))}
+                  </Group>
+                ) : null}
+
+                {materialItems.length > 0 ? (
+                  <Group label="Materials">
+                    {materialItems.map((s) => (
                       <Item
                         key={s.id}
                         value={`${s.label} ${s.hint} ${s.category}`}

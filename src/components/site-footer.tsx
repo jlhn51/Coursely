@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Wordmark } from "@/components/wordmark";
 
+// Every link here must resolve to a real page. If you add one, ship the
+// route in the same PR — dead links in the footer look like abandonware.
 const columns = [
   {
     title: "Product",
@@ -16,26 +18,17 @@ const columns = [
     links: [
       { href: "/sign-up", label: "Sign up" },
       { href: "/sign-in", label: "Sign in" },
-      { href: "/roadmap", label: "Roadmap" },
-      { href: "/changelog", label: "Changelog" },
     ],
   },
   {
-    title: "Resources",
-    links: [
-      { href: "/docs", label: "Docs" },
-      { href: "/blog", label: "Blog" },
-      { href: "/support", label: "Support" },
-      { href: "/contact", label: "Contact" },
-    ],
+    title: "Company",
+    links: [{ href: "/contact", label: "Contact" }],
   },
   {
     title: "Legal",
     links: [
       { href: "/privacy", label: "Privacy" },
       { href: "/terms", label: "Terms" },
-      { href: "/cookies", label: "Cookies" },
-      { href: "/security", label: "Security" },
     ],
   },
 ] as const;

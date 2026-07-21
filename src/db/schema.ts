@@ -1,5 +1,6 @@
 import {
   boolean,
+  date,
   index,
   integer,
   pgTable,
@@ -16,6 +17,10 @@ export const courses = pgTable(
     name: text("name").notNull(),
     professor: text("professor"),
     semester: text("semester"),
+    // Nullable calendar bounds. When both are set the dashboard shows real
+    // "Week X of Y" progress; otherwise it falls back to an empty state.
+    startDate: date("start_date", { mode: "date" }),
+    endDate: date("end_date", { mode: "date" }),
     // none | parsing | parsed | failed
     syllabusStatus: text("syllabus_status").notNull().default("none"),
     // Machine-readable reason set only when syllabusStatus === "failed".

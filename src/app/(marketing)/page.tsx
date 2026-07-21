@@ -1,11 +1,8 @@
 import Link from "next/link";
 import {
-  BookOpen,
-  Calendar,
   CalendarRange,
   Check,
   ChevronDown,
-  ClipboardCheck,
   Download,
   EyeOff,
   FileText,
@@ -13,14 +10,12 @@ import {
   Layers,
   ListChecks,
   Lock,
-  MessageSquare,
   Mic,
   Shield,
   ShieldCheck,
   Sparkles,
   Tag,
   Trash2,
-  TrendingUp,
   Workflow,
   X,
   Zap,
@@ -86,39 +81,6 @@ const steps = [
     n: "04",
     title: "Notes that write themselves.",
     body: "Record lectures in-browser; concepts get transcribed and tagged to the right course and week.",
-  },
-] as const;
-
-const builtFor = [
-  {
-    icon: Calendar,
-    title: "Course Timeline",
-    body: "Every course you're taking, laid out week by week.",
-  },
-  {
-    icon: MessageSquare,
-    title: "AI Tutor",
-    body: "Answers grounded in the materials you actually uploaded.",
-  },
-  {
-    icon: ClipboardCheck,
-    title: "Practice Tests",
-    body: "Question sets shaped by the parts of the syllabus you haven't mastered.",
-  },
-  {
-    icon: Layers,
-    title: "Flashcards",
-    body: "Deck generation from your slides and notes, tuned to your weak spots.",
-  },
-  {
-    icon: Mic,
-    title: "Lecture Notes",
-    body: "Record in the browser and get clean, taggable notes back.",
-  },
-  {
-    icon: TrendingUp,
-    title: "Progress Tracking",
-    body: "See what you know cold and what still needs work.",
   },
 ] as const;
 
@@ -210,7 +172,6 @@ export default function Home() {
         <HeroSection />
         <WhatItDoesSection />
         <HowItWorksSection />
-        <BuiltForSection />
         <PrivacySection />
         <PricingSection />
         <FAQSection />
@@ -357,44 +318,6 @@ function HowItWorksSection() {
           Try syllabus magic <span aria-hidden="true">→</span>
         </Link>
       </div>
-    </Reveal>
-  );
-}
-
-function BuiltForSection() {
-  return (
-    <Reveal
-      as="section"
-      id="built-for"
-      className="mx-auto w-full max-w-6xl px-6 py-20 md:py-28"
-    >
-      <Eyebrow icon={BookOpen}>What you get</Eyebrow>
-      <SectionHeading>
-        Built for <AccentSpan>real study.</AccentSpan>
-      </SectionHeading>
-      <p className="mt-4 max-w-[560px] text-[16px] leading-[1.55] text-muted">
-        Not another Notion template. Six product surfaces designed around one
-        thing — the course you&apos;re actually taking.
-      </p>
-
-      <ul className="mt-14 grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {builtFor.map((f) => (
-          <li
-            key={f.title}
-            className="flex h-full flex-col rounded-2xl border border-hairline bg-white p-8 transition-all duration-200 hover:border-ink/25 hover:shadow-[inset_0_-2px_0_0_rgb(59_76_255_/_0.2)] dark:bg-[#141414] dark:hover:border-white/25 dark:hover:shadow-[inset_0_-2px_0_0_rgb(90_107_255_/_0.25)]"
-          >
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent dark:bg-accent/15">
-              <f.icon size={18} strokeWidth={1.75} />
-            </span>
-            <h3 className="mt-5 text-[17px] font-semibold text-ink">
-              {f.title}
-            </h3>
-            <p className="mt-2 text-[14.5px] leading-[1.55] text-muted">
-              {f.body}
-            </p>
-          </li>
-        ))}
-      </ul>
     </Reveal>
   );
 }

@@ -8,26 +8,29 @@ import {
   FileText,
   GraduationCap,
   type LucideIcon,
-  Pencil,
   ScrollText,
-  Trash2,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { softDeleteTask, toggleTaskCompletion } from "@/actions/tasks";
+import { toast } from "sonner";
+import { updateTask } from "@/actions/tasks";
 import { Reveal } from "@/components/reveal";
+import { TaskDrawer, type TaskDrawerTask } from "@/components/task-drawer";
 import { type TaskType } from "@/lib/task-types";
 
 export type CalendarTask = {
   id: string;
   title: string;
+  description: string | null;
   courseId: string;
   courseName: string;
   taskType: string;
   isCompleted: boolean;
+  source: string;
   dueDate: string;
+  createdAt: string;
 };
 
 const typeIcon: Record<TaskType, LucideIcon> = {
@@ -68,6 +71,7 @@ export function CalendarView({ tasks }: { tasks: CalendarTask[] }) {
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [drawerTask, setDrawerTask] = useState<CalendarTask | null>(null);
 
   const monthName = MONTHS[cursor.getMonth()]!;
   const year = cursor.getFullYear();
@@ -100,6 +104,34 @@ export function CalendarView({ tasks }: { tasks: CalendarTask[] }) {
     }
     return count;
   }, [tasks, cursor, year]);
+
+  // When the current month is empty but the user has deadlines in OTHER
+  // months, offer a one-click jump to the nearest one. Empty-and-empty (no
+  // tasks anywhere) falls through to the existing "Nothing scheduled" copy.
+  const nearestMonthWithTasks = useMemo(() => {
+    if (monthTaskCount > 0 || tasks.length === 0) return null;
+    const cursorKey = cursor.getFullYear() * 12 + cursor.getMonth();
+    const monthSet = new Map<number, Date>();
+    for (const t of tasks) {
+      const d = new Date(t.dueDate);
+      const key = d.getFullYear() * 12 + d.getMonth();
+      if (!monthSet.has(key)) {
+        monthSet.set(key, new Date(d.getFullYear(), d.getMonth(), 1));
+      }
+    }
+    let best: { date: Date; distance: number } | null = null;
+    for (const [key, date] of monthSet) {
+      const distance = Math.abs(key - cursorKey);
+      if (!best || distance < best.distance) best = { date, distance };
+    }
+    if (!best) return null;
+    // Distance already ensures it's not the current month (would be 0 and we
+    // filtered on monthTaskCount === 0).
+    return {
+      date: best.date,
+      totalOutside: tasks.length,
+    };
+  }, [tasks, cursor, monthTaskCount]);
 
   const gridDays = useMemo(() => {
     if (view === "month") return buildMonthGrid(cursor);
@@ -180,7 +212,32 @@ export function CalendarView({ tasks }: { tasks: CalendarTask[] }) {
           </p>
         </div>
 
-        {monthTaskCount === 0 ? (
+        {monthTaskCount === 0 && nearestMonthWithTasks ? (
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/25 bg-accent/[0.05] p-5">
+            <div className="min-w-0">
+              <p className="font-serif text-[18px] leading-tight text-ink">
+                Nothing scheduled for {monthName}.
+              </p>
+              <p className="mt-1 text-[13px] text-muted">
+                You have {nearestMonthWithTasks.totalOutside} deadline
+                {nearestMonthWithTasks.totalOutside === 1 ? "" : "s"} outside
+                this range.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCursor(nearestMonthWithTasks.date)}
+              className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3.5 py-2 text-[13px] font-medium text-white transition-all duration-200 hover:-translate-y-px hover:bg-[#2e3fef] hover:shadow-[0_10px_24px_-8px_rgb(59_76_255_/_0.55)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:hover:bg-[#6a7bff]"
+            >
+              Jump to{" "}
+              {MONTHS[nearestMonthWithTasks.date.getMonth()]}{" "}
+              {nearestMonthWithTasks.date.getFullYear() === year
+                ? ""
+                : nearestMonthWithTasks.date.getFullYear()}{" "}
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        ) : monthTaskCount === 0 ? (
           <p className="mt-6 rounded-2xl border border-hairline bg-white p-6 text-center text-[14px] italic text-muted dark:bg-[#141414]">
             Nothing scheduled for {monthName}. Nice and open.
           </p>
@@ -222,9 +279,30 @@ export function CalendarView({ tasks }: { tasks: CalendarTask[] }) {
         <DayDrawer
           day={selectedDay}
           tasks={selectedTasks}
+          onOpenTask={(t) => setDrawerTask(t)}
           onClose={() => setSelectedDay(null)}
         />
       ) : null}
+
+      <TaskDrawer
+        task={
+          drawerTask
+            ? ({
+                id: drawerTask.id,
+                title: drawerTask.title,
+                description: drawerTask.description,
+                courseId: drawerTask.courseId,
+                courseName: drawerTask.courseName,
+                taskType: drawerTask.taskType,
+                isCompleted: drawerTask.isCompleted,
+                dueDate: drawerTask.dueDate,
+                source: drawerTask.source,
+                createdAt: drawerTask.createdAt,
+              } satisfies TaskDrawerTask)
+            : null
+        }
+        onClose={() => setDrawerTask(null)}
+      />
     </div>
   );
 }
@@ -322,10 +400,12 @@ function DayCell({
 function DayDrawer({
   day,
   tasks,
+  onOpenTask,
   onClose,
 }: {
   day: Date;
   tasks: CalendarTask[];
+  onOpenTask: (t: CalendarTask) => void;
   onClose: () => void;
 }) {
   return (
@@ -369,7 +449,11 @@ function DayDrawer({
           ) : (
             <ul className="divide-y divide-hairline">
               {tasks.map((t) => (
-                <DrawerTaskRow key={t.id} task={t} onDeleted={onClose} />
+                <DrawerTaskRow
+                  key={t.id}
+                  task={t}
+                  onOpen={() => onOpenTask(t)}
+                />
               ))}
             </ul>
           )}
@@ -381,58 +465,85 @@ function DayDrawer({
 
 function DrawerTaskRow({
   task,
-  onDeleted,
+  onOpen,
 }: {
   task: CalendarTask;
-  onDeleted: () => void;
+  onOpen: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [optimisticCompleted, setOptimisticCompleted] = useState(
+    task.isCompleted,
+  );
   const type = (task.taskType as TaskType) ?? "other";
   const Icon = typeIcon[type] ?? CheckSquare;
 
   function onToggle() {
+    const next = !optimisticCompleted;
+    setOptimisticCompleted(next);
     startTransition(async () => {
-      await toggleTaskCompletion({ taskId: task.id });
-      router.refresh();
-    });
-  }
-  function onDelete() {
-    if (!confirm(`Delete "${task.title}"?`)) return;
-    startTransition(async () => {
-      const r = await softDeleteTask({ taskId: task.id });
-      if ("success" in r && r.success) {
-        router.refresh();
-        onDeleted();
+      const r = await updateTask({
+        taskId: task.id,
+        title: task.title,
+        description: task.description ?? undefined,
+        taskType: type,
+        dueDate: task.dueDate,
+        isCompleted: next,
+      });
+      if ("error" in r && r.error) {
+        setOptimisticCompleted(!next);
+        toast.error("Couldn't update", { description: r.error });
+        return;
       }
+      router.refresh();
     });
   }
 
   return (
-    <li className="flex items-start gap-3 p-3">
+    <li
+      role="button"
+      tabIndex={0}
+      onClick={(e) => {
+        const el = e.target as HTMLElement;
+        if (el.closest("button, a")) return;
+        onOpen();
+      }}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter") {
+          e.preventDefault();
+          onOpen();
+        } else if (e.key === " ") {
+          e.preventDefault();
+          onToggle();
+        }
+      }}
+      className="flex cursor-pointer items-start gap-3 rounded-md p-3 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent hover:bg-paper dark:hover:bg-[#0f0f10]"
+    >
       <button
         type="button"
         onClick={onToggle}
         disabled={pending}
-        aria-pressed={task.isCompleted}
-        aria-label={task.isCompleted ? "Mark as not done" : "Mark as done"}
+        aria-pressed={optimisticCompleted}
+        aria-label={optimisticCompleted ? "Mark as not done" : "Mark as done"}
         className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
-          task.isCompleted
+          optimisticCompleted
             ? "border-accent bg-accent text-white"
             : "border-hairline hover:border-accent/60"
         } ${pending ? "opacity-60" : ""}`}
       >
-        {task.isCompleted ? "✓" : ""}
+        {optimisticCompleted ? "✓" : ""}
       </button>
       <div className="min-w-0 flex-1">
         <p
-          className={`text-[14px] font-medium ${task.isCompleted ? "text-muted line-through decoration-hairline" : "text-ink"}`}
+          className={`text-[14px] font-medium ${optimisticCompleted ? "text-muted line-through decoration-hairline" : "text-ink"}`}
         >
           {task.title}
         </p>
         <p className="mt-0.5 text-[12px] text-muted">
           <Link
             href={`/courses/${task.courseId}`}
+            onClick={(e) => e.stopPropagation()}
             className="hover:text-ink hover:underline"
           >
             {task.courseName}
@@ -445,24 +556,6 @@ function DrawerTaskRow({
           <Icon size={9} strokeWidth={2} aria-hidden="true" />
           {type}
         </span>
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <Link
-          href={`/courses/${task.courseId}#tasks`}
-          aria-label="Edit"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-ink/[0.05] hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:hover:bg-white/[0.06]"
-        >
-          <Pencil size={12} strokeWidth={1.75} aria-hidden="true" />
-        </Link>
-        <button
-          type="button"
-          onClick={onDelete}
-          disabled={pending}
-          aria-label="Delete"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-red-500/10 hover:text-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:hover:text-red-400"
-        >
-          <Trash2 size={12} strokeWidth={1.75} aria-hidden="true" />
-        </button>
       </div>
     </li>
   );

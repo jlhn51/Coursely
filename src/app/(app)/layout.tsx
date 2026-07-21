@@ -6,6 +6,7 @@ import { getUserTasks } from "@/actions/tasks";
 import { getUserMaterials } from "@/actions/materials";
 import { AddMenu } from "@/components/app-shell/add-menu";
 import { CommandPalette } from "@/components/app-shell/command-palette";
+import { KeyboardShortcutsHelp } from "@/components/app-shell/keyboard-shortcuts";
 import { MobileNav } from "@/components/app-shell/mobile-nav";
 import { NotificationBell } from "@/components/app-shell/notification-bell";
 import {
@@ -98,6 +99,7 @@ export default async function AppLayout({
           tasks={paletteTasks}
           materials={paletteMaterials}
         />
+        <KeyboardShortcutsHelp />
       </div>
     </ParsingProvider>
   );

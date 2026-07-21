@@ -25,7 +25,7 @@ export default async function CoursesIndexPage() {
         <div className="flex flex-wrap items-baseline justify-between gap-4">
           <div className="max-w-2xl">
             <h1 className="font-serif text-[36px] leading-[1.05] text-ink md:text-[52px]">
-              Your <em className="italic text-accent">catalogue.</em>
+              Your <em className="italic text-accent">semester.</em>
             </h1>
             <p className="mt-3 text-[15.5px] leading-[1.55] text-muted md:text-[17px]">
               Every course you&apos;re taking, in one place.

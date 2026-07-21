@@ -9,11 +9,14 @@ export default async function CalendarPage() {
     .map((t) => ({
       id: t.id,
       title: t.title,
+      description: t.description,
       courseId: t.courseId,
       courseName: t.courseName,
       taskType: t.taskType,
       isCompleted: t.isCompleted,
+      source: t.source,
       dueDate: (t.dueDate as Date).toISOString(),
+      createdAt: (t.createdAt as Date).toISOString(),
     }));
 
   return <CalendarView tasks={serialized} />;

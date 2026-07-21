@@ -143,6 +143,86 @@ export async function getCourseTasks(courseId: string): Promise<Task[]> {
     .orderBy(asc(tasks.dueDate));
 }
 
+// ---------- update ----------
+
+const updateTaskSchema = z.object({
+  taskId: z.string().uuid(),
+  title: z.string().trim().min(1, "Task title is required").max(200),
+  description: z
+    .string()
+    .trim()
+    .max(2000)
+    .optional()
+    .transform(emptyToUndefined),
+  taskType: z.enum(TASK_TYPES).default("other"),
+  dueDate: z
+    .string()
+    .optional()
+    // Empty string clears the date. A valid string becomes a Date; anything
+    // unparseable is silently dropped.
+    .transform((v) => {
+      if (v === undefined) return undefined;
+      if (v === "") return null;
+      const d = new Date(v);
+      return Number.isNaN(d.getTime()) ? undefined : d;
+    }),
+  isCompleted: z.boolean().optional(),
+});
+
+export type UpdateTaskInput = z.input<typeof updateTaskSchema>;
+export type UpdateTaskResult =
+  | { success: true }
+  | { success?: false; error: string };
+
+export async function updateTask(
+  input: UpdateTaskInput,
+): Promise<UpdateTaskResult> {
+  const parsed = updateTaskSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+
+  const { userId } = await auth();
+  if (!userId) return { error: "Not authenticated" };
+
+  const [existing] = await db
+    .select({ id: tasks.id, courseId: tasks.courseId })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.id, parsed.data.taskId),
+        eq(tasks.userId, userId),
+        isNull(tasks.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!existing) return { error: "Task not found" };
+
+  const patch: Partial<typeof tasks.$inferInsert> = {
+    title: parsed.data.title,
+    description: parsed.data.description ?? null,
+    taskType: parsed.data.taskType,
+    updatedAt: new Date(),
+  };
+  if (parsed.data.dueDate !== undefined) {
+    patch.dueDate = parsed.data.dueDate;
+  }
+  if (parsed.data.isCompleted !== undefined) {
+    patch.isCompleted = parsed.data.isCompleted;
+  }
+
+  await db
+    .update(tasks)
+    .set(patch)
+    .where(and(eq(tasks.id, existing.id), eq(tasks.userId, userId)));
+
+  revalidatePath("/tasks");
+  revalidatePath("/calendar");
+  revalidatePath("/dashboard");
+  revalidatePath(`/courses/${existing.courseId}`);
+  return { success: true };
+}
+
 const softDeleteSchema = z.object({ taskId: z.string().uuid() });
 
 export async function softDeleteTask(
