@@ -1,6 +1,7 @@
 import {ClerkProvider} from "@clerk/nextjs";
 import type { Metadata, Viewport } from "next";
 import { Inter, Instrument_Serif } from "next/font/google";
+import { Toaster } from "@/components/toaster";
 import "./globals.css";
 
 const inter = Inter({
@@ -44,13 +45,15 @@ export const viewport: Viewport = {
   ],
 };
 
-// Runs before hydration; sets the `.dark` class on <html> so the first
-// paint matches the user's stored / preferred theme (no flash).
+// Runs before hydration; sets the `.dark` class + sidebar state on <html> so
+// the first paint matches stored preferences (no flash).
 const themeInitScript = `
 (function(){try{
   var t=localStorage.getItem('theme');
   var d=window.matchMedia('(prefers-color-scheme: dark)').matches;
   if(t==='dark'||(t!=='light'&&d)){document.documentElement.classList.add('dark')}
+  var s=localStorage.getItem('sidebar-collapsed');
+  if(s==='1'){document.documentElement.dataset.sidebar='collapsed'}
 }catch(e){}})();
 `;
 
@@ -67,6 +70,7 @@ export default function RootLayout({
         <ClerkProvider>
           <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
           {children}
+          <Toaster />
         </ClerkProvider>
       </body>
     </html>
