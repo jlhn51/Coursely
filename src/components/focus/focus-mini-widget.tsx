@@ -14,7 +14,6 @@ export function FocusMiniWidget() {
   const {
     session,
     remainingSeconds,
-    restore,
     pause,
     resume,
     toggleAudioPlay,
@@ -22,8 +21,10 @@ export function FocusMiniWidget() {
   } = useFocusSession();
   const [confirmExit, setConfirmExit] = useState(false);
 
+  // Show the widget whenever a session is running AND the user isn't on
+  // /focus (where the full overlay lives). No `minimized` flag — that
+  // would fight the route change from the Minimize button.
   if (!session) return null;
-  if (!session.minimized) return null;
   if (pathname?.startsWith("/focus")) return null;
 
   const isFocus = session.phase === "work";
@@ -46,7 +47,6 @@ export function FocusMiniWidget() {
   };
 
   const expand = () => {
-    restore();
     router.push("/focus");
   };
 

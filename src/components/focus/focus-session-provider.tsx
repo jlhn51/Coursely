@@ -97,8 +97,6 @@ export type ActiveSession = {
   phaseEndsAt: number; // ms epoch; only meaningful when running
   pausedRemaining: number | null; // ms; set when paused, resumes into phaseEndsAt
 
-  minimized: boolean;
-
   attachedTaskId: string | null;
   attachedTaskTitle: string | null;
   attachedCourseId: string | null;
@@ -185,8 +183,6 @@ type Action =
   | { type: "pause" }
   | { type: "resume"; now: number }
   | { type: "skip"; now: number }
-  | { type: "minimize" }
-  | { type: "restore" }
   | { type: "audio-unlock" }
   | { type: "audio-playing-changed"; playing: boolean }
   | { type: "clear-chimes" }
@@ -349,14 +345,6 @@ function reducer(state: State, action: Action): State {
       };
     }
 
-    case "minimize":
-      if (!s) return state;
-      return { ...state, session: { ...s, minimized: true } };
-
-    case "restore":
-      if (!s) return state;
-      return { ...state, session: { ...s, minimized: false } };
-
     case "audio-unlock":
       if (!s) return state;
       return {
@@ -366,6 +354,9 @@ function reducer(state: State, action: Action): State {
 
     case "audio-playing-changed":
       if (!s) return state;
+      // Guard: return the same reference when nothing changed so this
+      // action can never trigger a re-render → useEffect → dispatch loop.
+      if (s.audioPlaying === action.playing) return state;
       return { ...state, session: { ...s, audioPlaying: action.playing } };
 
     case "clear-chimes":
@@ -392,8 +383,6 @@ export type FocusSessionContextValue = {
   resume: () => void;
   skip: () => void;
   exit: (options?: { markTaskDone?: boolean }) => Promise<void>;
-  minimize: () => void;
-  restore: () => void;
   unlockAudio: () => Promise<void>;
   toggleAudioPlay: () => Promise<void>;
 };
@@ -575,12 +564,22 @@ export function FocusSessionProvider({
   }, [chimeQueue, playChime]);
 
   // Play/stop music in response to running + phase state.
+  //
+  // DEPS are deliberately narrow — running, phase, sessionId, trackId. If
+  // we depended on `session` itself the effect would re-fire on every
+  // reducer step and duel with `playMusic`'s own `audio-playing-changed`
+  // dispatch (the render-loop bug this replaces). The reducer's guard on
+  // that action provides a second line of defence.
+  const hasSession = !!session;
+  const isRunning = !!session?.running;
+  const currentPhase = session?.phase;
+  const currentSessionId = session?.sessionId;
   useEffect(() => {
-    if (!session) {
+    if (!hasSession) {
       stopMusic();
       return;
     }
-    if (session.running && session.phase === "work") {
+    if (isRunning && currentPhase === "work") {
       playMusic(prefs.trackId).catch(() => {
         // Autoplay blocked; UI shows the "Click to enable audio" prompt.
       });
@@ -589,13 +588,13 @@ export function FocusSessionProvider({
       dispatch({ type: "audio-playing-changed", playing: false });
     }
   }, [
-    session?.running,
-    session?.phase,
-    session?.sessionId,
+    hasSession,
+    isRunning,
+    currentPhase,
+    currentSessionId,
     prefs.trackId,
     playMusic,
     stopMusic,
-    session,
   ]);
 
   // ----- Wall-clock ticker -----
@@ -688,7 +687,6 @@ export function FocusSessionProvider({
           running: true,
           phaseEndsAt: now + args.workSec * 1000,
           pausedRemaining: null,
-          minimized: false,
           attachedTaskId: args.attachedTaskId,
           attachedTaskTitle: args.attachedTaskTitle,
           attachedCourseId: args.attachedCourseId,
@@ -711,9 +709,6 @@ export function FocusSessionProvider({
     () => dispatch({ type: "skip", now: Date.now() }),
     [],
   );
-  const minimize = useCallback(() => dispatch({ type: "minimize" }), []);
-  const restore = useCallback(() => dispatch({ type: "restore" }), []);
-
   const unlockAudio = useCallback(async () => {
     // A user gesture unlocks autoplay; kick off the current track and mark
     // the tab-scoped unlock so this doesn't nag again.
@@ -801,8 +796,6 @@ export function FocusSessionProvider({
       resume,
       skip,
       exit,
-      minimize,
-      restore,
       unlockAudio,
       toggleAudioPlay,
     }),
@@ -816,8 +809,6 @@ export function FocusSessionProvider({
       resume,
       skip,
       exit,
-      minimize,
-      restore,
       unlockAudio,
       toggleAudioPlay,
     ],

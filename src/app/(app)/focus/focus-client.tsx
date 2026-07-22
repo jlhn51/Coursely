@@ -69,14 +69,10 @@ export function FocusClient({
   courses: CourseOption[];
   openTasks: TaskOption[];
 }) {
-  const { session, restore } = useFocusSession();
+  const { session } = useFocusSession();
 
-  // If a session is already running (either fresh-started here or resumed
-  // via widget expand), show the overlay. Otherwise show the landing.
-  useEffect(() => {
-    if (session && session.minimized) restore();
-  }, [session, restore]);
-
+  // Overlay-vs-landing is a pure function of "is a session running." The
+  // widget-vs-overlay decision lives in the layout and is route-driven.
   if (session) {
     return <FocusSessionOverlay />;
   }
@@ -498,7 +494,6 @@ function FocusSessionOverlay() {
     pause,
     resume,
     skip,
-    minimize,
     exit,
     unlockAudio,
     toggleAudioPlay,
@@ -582,10 +577,7 @@ function FocusSessionOverlay() {
             type="button"
             aria-label="Minimize"
             title="Minimize (keep session running in the background)"
-            onClick={() => {
-              minimize();
-              router.push("/dashboard");
-            }}
+            onClick={() => router.push("/dashboard")}
             className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/15 text-white/85 hover:bg-white/[0.08]"
           >
             <Minimize2 size={14} strokeWidth={2} aria-hidden="true" />
