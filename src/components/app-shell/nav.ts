@@ -38,13 +38,13 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Tasks", href: "/tasks", icon: CheckSquare },
       { label: "Materials", href: "/materials", icon: FileText },
-      { label: "Focus mode", href: "/focus", icon: Timer, soon: true },
+      { label: "Focus mode", href: "/focus", icon: Timer },
     ],
   },
   {
     label: "AI",
     items: [
-      { label: "AI Tutor", href: "/tutor", icon: MessageSquare, soon: true },
+      { label: "AI Tutor", href: "/tutor", icon: MessageSquare },
       { label: "Flashcards", href: "/flashcards", icon: Layers, soon: true },
       { label: "Notes", href: "/notes", icon: Mic, soon: true },
     ],

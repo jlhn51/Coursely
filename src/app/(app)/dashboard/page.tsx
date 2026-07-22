@@ -1,6 +1,9 @@
 import { currentUser } from "@clerk/nextjs/server";
 import {
   Activity,
+  ArrowDownRight,
+  ArrowRight,
+  ArrowUpRight,
   BookOpen,
   Calendar,
   Check,
@@ -11,11 +14,13 @@ import {
   Plus,
   ScrollText,
   Target,
+  Timer,
   Upload,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { getUserCourses } from "@/actions/courses";
+import { getFocusSessionsSince } from "@/actions/focus";
 import {
   getUserMaterials,
   type UserMaterialRow,
@@ -52,14 +57,23 @@ const typeIcon: Record<TaskType, LucideIcon> = {
 
 export default async function DashboardPage() {
   const now = new Date();
-  const [user, coursesList, tasksAll, materialsAll] = await Promise.all([
-    currentUser(),
-    getUserCourses(),
-    // 500 keeps overdue tasks visible even for busy semesters. The per-course
-    // status helper needs the full set to agree with the course-detail page.
-    getUserTasks(500),
-    getUserMaterials(20),
-  ]);
+  // 14-day window fuels the FOCUS card (this-vs-last-week comparison).
+  const twoWeeksAgo = new Date(now);
+  twoWeeksAgo.setDate(now.getDate() - 14);
+  twoWeeksAgo.setHours(0, 0, 0, 0);
+  const [user, coursesList, tasksAll, materialsAll, focusSessions] =
+    await Promise.all([
+      currentUser(),
+      getUserCourses(),
+      // 500 keeps overdue tasks visible even for busy semesters. The per-course
+      // status helper needs the full set to agree with the course-detail page.
+      getUserTasks(500),
+      getUserMaterials(20),
+      getFocusSessionsSince(twoWeeksAgo),
+    ]);
+
+  const focusThisWeek = sumFocusSince(focusSessions, now, 0);
+  const focusLastWeek = sumFocusSince(focusSessions, now, 7);
 
   // Preferred name (set in /settings) wins over Clerk's firstName, which is
   // often the user's full legal name typed into one field. ALWAYS split on
@@ -138,6 +152,12 @@ export default async function DashboardPage() {
             semester={semester}
             hasCourses={hasCourses}
             newestCourseId={newestCourseId}
+          />
+        </div>
+        <div className="mt-4">
+          <FocusCard
+            secondsThisWeek={focusThisWeek}
+            secondsLastWeek={focusLastWeek}
           />
         </div>
       </Reveal>
@@ -597,6 +617,110 @@ function HorizonPill({ task, now }: { task: UserTaskRow; now: Date }) {
       </div>
     </Link>
   );
+}
+
+// ---------- Focus card ----------
+
+function FocusCard({
+  secondsThisWeek,
+  secondsLastWeek,
+}: {
+  secondsThisWeek: number;
+  secondsLastWeek: number;
+}) {
+  const hoursThisWeek = secondsThisWeek / 3600;
+  const delta = secondsThisWeek - secondsLastWeek;
+  const trend =
+    Math.abs(delta) < 5 * 60
+      ? "flat"
+      : delta > 0
+        ? "up"
+        : "down";
+  const oneLiner =
+    hoursThisWeek >= 8
+      ? "Deep week."
+      : hoursThisWeek >= 3
+        ? "Steady rhythm."
+        : hoursThisWeek > 0
+          ? "Warming up."
+          : "Time to build the habit.";
+  const TrendIcon =
+    trend === "up" ? ArrowUpRight : trend === "down" ? ArrowDownRight : ArrowRight;
+  const trendClass =
+    trend === "up"
+      ? "text-accent"
+      : trend === "down"
+        ? "text-red-500/80 dark:text-red-400/80"
+        : "text-muted";
+
+  return (
+    <Link
+      href="/focus/stats"
+      className={`${cardShell} block cursor-pointer`}
+    >
+      <div className="flex items-center gap-2">
+        <Timer
+          size={13}
+          strokeWidth={2}
+          className="text-accent"
+          aria-hidden="true"
+        />
+        <p className={eyebrow}>Focus</p>
+      </div>
+      <div className="mt-4 flex items-baseline gap-3">
+        <p className="font-serif text-[56px] leading-[0.95] text-ink">
+          {formatFocus(secondsThisWeek)}
+        </p>
+        <span
+          className={`inline-flex items-center gap-0.5 text-[12.5px] font-medium ${trendClass}`}
+        >
+          <TrendIcon size={13} strokeWidth={2} aria-hidden="true" />
+          {formatDelta(delta)}
+        </span>
+      </div>
+      <p className="mt-1 text-[13px] text-muted">focused this week</p>
+      <p className="mt-auto pt-5 text-[12.5px] italic text-muted">
+        {oneLiner}
+      </p>
+    </Link>
+  );
+}
+
+function formatFocus(sec: number): string {
+  if (sec <= 0) return "0m";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+function formatDelta(sec: number): string {
+  const abs = Math.abs(sec);
+  if (abs < 60) return "flat";
+  const h = Math.floor(abs / 3600);
+  const m = Math.floor((abs % 3600) / 60);
+  const sign = sec > 0 ? "+" : "−";
+  if (h === 0) return `${sign}${m}m`;
+  return `${sign}${h}h ${m}m`;
+}
+
+// Sum the seconds of focus in the 7-day window ending N days before `now`.
+// (dayShift=0 → this week; dayShift=7 → the previous week.)
+function sumFocusSince(
+  sessions: Array<{ startedAt: Date; totalWorkSeconds: number }>,
+  now: Date,
+  dayShift: number,
+): number {
+  const end = new Date(now);
+  end.setDate(now.getDate() - dayShift);
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(end);
+  start.setDate(end.getDate() - 6);
+  start.setHours(0, 0, 0, 0);
+  return sessions
+    .filter((s) => s.startedAt >= start && s.startedAt <= end)
+    .reduce((acc, s) => acc + s.totalWorkSeconds, 0);
 }
 
 // ---------- Recent activity feed ----------

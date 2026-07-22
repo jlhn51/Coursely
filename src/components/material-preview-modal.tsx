@@ -6,15 +6,19 @@ import {
   FileText,
   Image as ImageIcon,
   type LucideIcon,
+  MessageSquare,
   Presentation,
+  RefreshCcw,
   Sparkles,
   Trash2,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
+import { reembedMaterial } from "@/actions/embed-material";
 import { softDeleteMaterial } from "@/actions/materials";
 
 // Preview payload — same shape for /materials and per-course sections. All
@@ -27,11 +31,15 @@ export type MaterialPreview = {
   fileCategory: string;
   fileSize: number;
   courseName: string;
+  courseId?: string;
   uploadedAt: string | Date;
   // Whether deleting this material could orphan parsed topics/tasks. The
   // caller sets this to true when the material is a syllabus tied to a
   // course whose parse succeeded — we warn but do not block.
   syllabusHasParsedContent?: boolean;
+  // For PDF citations from the AI tutor. When set, the iframe URL gets a
+  // `#page=N` fragment so Chrome/Firefox jump straight to that page.
+  startPage?: number | null;
 };
 
 function formatDate(d: Date): string {
@@ -88,6 +96,7 @@ export function MaterialPreviewModal({
   const router = useRouter();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [reembedding, startReembed] = useTransition();
 
   const handleClose = useCallback(() => {
     setConfirmDelete(false);
@@ -134,6 +143,22 @@ export function MaterialPreviewModal({
     });
   }
 
+  function onReembed() {
+    if (!material) return;
+    startReembed(async () => {
+      const r = await reembedMaterial(material.id);
+      if ("error" in r && r.error) {
+        toast.error("Couldn't re-embed", { description: r.error });
+        return;
+      }
+      const chunks = "chunks" in r ? r.chunks : 0;
+      toast.success("Re-embedded for AI tutor", {
+        description: `${chunks} chunk${chunks === 1 ? "" : "s"} indexed.`,
+      });
+      router.refresh();
+    });
+  }
+
   return createPortal(
     <div
       role="dialog"
@@ -176,7 +201,11 @@ export function MaterialPreviewModal({
         <div className="flex-1 overflow-hidden bg-paper dark:bg-[#0f0f10]">
           {isPdf ? (
             <iframe
-              src={material.url}
+              src={
+                material.startPage && material.startPage > 0
+                  ? `${material.url}#page=${material.startPage}`
+                  : material.url
+              }
               title={material.name}
               className="h-full w-full"
             />
@@ -218,7 +247,7 @@ export function MaterialPreviewModal({
               </p>
             ) : null}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
               disabled={pending}
@@ -228,6 +257,30 @@ export function MaterialPreviewModal({
               <Trash2 size={12} strokeWidth={2} aria-hidden="true" />
               Delete
             </button>
+            {isPdf ? (
+              <button
+                type="button"
+                disabled={reembedding}
+                onClick={onReembed}
+                title="Re-run the embedding pipeline for this PDF"
+                className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-white px-3 py-1.5 text-[13px] font-medium text-ink transition-colors hover:bg-ink/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60 dark:bg-[#141414] dark:hover:bg-white/[0.05]"
+              >
+                <RefreshCcw size={12} strokeWidth={2} aria-hidden="true" />
+                {reembedding ? "Re-embedding…" : "Re-embed for AI tutor"}
+              </button>
+            ) : null}
+            {material.courseId ? (
+              <Link
+                href={`/courses/${material.courseId}/tutor?prompt=${encodeURIComponent(
+                  `Explain "${material.name}" in the context of ${material.courseName}.`,
+                )}`}
+                onClick={handleClose}
+                className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-white px-3 py-1.5 text-[13px] font-medium text-ink transition-colors hover:border-accent/50 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:bg-[#141414] dark:hover:bg-white/[0.05]"
+              >
+                <MessageSquare size={12} strokeWidth={2} aria-hidden="true" />
+                Ask tutor about this →
+              </Link>
+            ) : null}
             <a
               href={material.url}
               target="_blank"

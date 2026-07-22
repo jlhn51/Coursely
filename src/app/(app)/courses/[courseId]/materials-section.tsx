@@ -302,6 +302,7 @@ export function MaterialsSection({
                 fileCategory: previewMaterial.fileCategory,
                 fileSize: previewMaterial.fileSize,
                 courseName,
+                courseId,
                 uploadedAt: previewMaterial.uploadedAt,
                 syllabusHasParsedContent:
                   previewMaterial.fileCategory === "syllabus" &&

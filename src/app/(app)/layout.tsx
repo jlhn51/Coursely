@@ -15,6 +15,8 @@ import {
 } from "@/components/app-shell/parsing-provider";
 import { SearchBar } from "@/components/app-shell/search-bar";
 import { SidebarShell } from "@/components/app-shell/sidebar-shell";
+import { FocusMiniWidget } from "@/components/focus/focus-mini-widget";
+import { FocusSessionProvider } from "@/components/focus/focus-session-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Wordmark } from "@/components/wordmark";
 import { startOfDay } from "@/lib/dashboard";
@@ -61,6 +63,7 @@ export default async function AppLayout({
 
   return (
     <ParsingProvider>
+      <FocusSessionProvider>
       <div className="min-h-screen bg-paper">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-hairline bg-paper/85 px-4 backdrop-blur-md md:px-6">
           <MobileNav />
@@ -100,7 +103,9 @@ export default async function AppLayout({
           materials={paletteMaterials}
         />
         <KeyboardShortcutsHelp />
+        <FocusMiniWidget />
       </div>
+      </FocusSessionProvider>
     </ParsingProvider>
   );
 }

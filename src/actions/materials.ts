@@ -3,10 +3,12 @@
 import { auth } from "@clerk/nextjs/server";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { courses, type Material, materials } from "@/db/schema";
 import { FILE_CATEGORIES } from "@/lib/file-categories";
+import { embedMaterialForUser } from "./embed-material";
 
 export type UserMaterialRow = Material & { courseName: string };
 
@@ -69,6 +71,27 @@ export async function createMaterial(
 
   if (!row) return { error: "Failed to save material" };
 
+  // Fire-and-forget the embedding pipeline. `after()` schedules the work on
+  // Next.js' waitUntil so the upload response returns immediately while the
+  // embedding still runs to completion (unlike a bare Promise, which would
+  // be killed when the response finishes on Vercel).
+  const isPdf =
+    parsed.data.fileType.includes("pdf") ||
+    parsed.data.name.toLowerCase().endsWith(".pdf");
+  if (isPdf) {
+    const materialId = row.id;
+    after(async () => {
+      try {
+        await embedMaterialForUser(materialId, userId);
+      } catch (err) {
+        console.error("[embed:background_error]", {
+          materialId,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
+  }
+
   revalidatePath(`/courses/${parsed.data.courseId}`);
   revalidatePath("/materials");
   return { success: true, materialId: row.id };
@@ -126,6 +149,43 @@ export async function getCourseMaterials(
       ),
     )
     .orderBy(desc(materials.uploadedAt));
+}
+
+// Lightweight preview lookup by id — used by the tutor to open a citation
+// inline in the material preview modal. Ownership-scoped like every other
+// materials query.
+export async function getMaterialPreview(
+  materialId: string,
+): Promise<UserMaterialRow | null> {
+  const { userId } = await auth();
+  if (!userId) return null;
+
+  const [row] = await db
+    .select({
+      id: materials.id,
+      courseId: materials.courseId,
+      userId: materials.userId,
+      name: materials.name,
+      url: materials.url,
+      fileType: materials.fileType,
+      fileSize: materials.fileSize,
+      fileCategory: materials.fileCategory,
+      uploadedAt: materials.uploadedAt,
+      deletedAt: materials.deletedAt,
+      courseName: courses.name,
+    })
+    .from(materials)
+    .innerJoin(courses, eq(materials.courseId, courses.id))
+    .where(
+      and(
+        eq(materials.id, materialId),
+        eq(materials.userId, userId),
+        isNull(materials.deletedAt),
+        isNull(courses.deletedAt),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
 }
 
 const softDeleteSchema = z.object({ materialId: z.string().uuid() });
